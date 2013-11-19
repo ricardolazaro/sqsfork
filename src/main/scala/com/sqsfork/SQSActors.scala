@@ -11,7 +11,7 @@
 //case class SQSMessageForDelete(message: Message, sourceUrl: String)
 //case class SQSMessageForFutureRetry(messageBody: String)
 //
-//class SQSManagerActor(executionSettings: ExecutionSettings, actorSystem: ActorSystem) extends Actor with ActorLogging {
+//class SQSManagerActor(accessKey: String, secretKey: String, actorSystem: ActorSystem) extends Actor with ActorLogging {
 //  
 //  sys.ShutdownHookThread {
 //    stopActors()
