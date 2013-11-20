@@ -21,8 +21,15 @@ class SQSHelper(accessKey: String, secretKey: String, queueName: String) {
   
   private lazy val queueUrl = client.createQueue(new CreateQueueRequest(queueName)).getQueueUrl
 
-  def fetchMessage = client.receiveMessage(new ReceiveMessageRequest(queueUrl).withMaxNumberOfMessages(10).withAttributeNames(("ApproximateReceiveCount"))).getMessages().asScala 
+  def fetchMessages = {
+    val request = new ReceiveMessageRequest(queueUrl)
+    	.withMaxNumberOfMessages(10)
+    	.withAttributeNames("ApproximateReceiveCount")
+    client.receiveMessage(request).getMessages().asScala.toList
+  }
     
-  def deleteMessage(receiptHandle: String) = client.deleteMessage(new DeleteMessageRequest().withQueueUrl(queueUrl).withReceiptHandle(receiptHandle))
+  def deleteMessage(receiptHandle: String) = {
+    client.deleteMessage(new DeleteMessageRequest(queueUrl, receiptHandle))
+  }
   
 }

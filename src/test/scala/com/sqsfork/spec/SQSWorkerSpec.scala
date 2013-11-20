@@ -4,6 +4,7 @@ import org.scalatest.Matchers
 import org.scalatest.FlatSpec
 import com.sqsfork.SQSWorker
 import com.amazonaws.services.sqs.model.Message
+import com.sqsfork.Credentials
 
 
 class DummyWorker extends SQSWorker {
