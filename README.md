@@ -4,7 +4,7 @@ Sqsfork
 High performance, Akka based Amazon SQS messages consumer for Scala.
 Tested with scala 2.10 and Java 7
 
-SQS is complete message solution powered by Amazon, including monitoring, alarms, redundancy, etc. 
+SQS is a complete message solution powered by Amazon, including monitoring, alarms, redundancy, etc. 
 Due to its particularities, we decided to build a message consumer from scratch, to better handle costs, latency and others.
 
 Getting Start
