@@ -2,7 +2,7 @@ Sqsfork
 ======
 
 High performance, Akka based Amazon SQS messages consumer for Scala.
-Tested with scala 2.10 and 
+Tested with scala 2.10 and Java 7
 
 SQS is complete message solution powered by Amazon, including monitoring, alarms, redundancy, etc. 
 Due to its particularities, we decided to build a message consumer from scratch, to better handle costs, latency and others.
@@ -10,7 +10,7 @@ Due to its particularities, we decided to build a message consumer from scratch,
 Getting Start
 -------------
 
-1.  Add qsfork to your project:
+1.  Add sqsfork to your project:
 
   ```scala
   libraryDependencies += "sqsfork" %% "sqsfork" % "1.0"
@@ -57,7 +57,8 @@ Getting Start
 Deploy
 ------
 
-Use a Procfile (like Heroku does) to start your workers. In your Procfile, add:
+You can call **worker.run** in any initializer application hook from your application (in this case use **waitForever = false**)
+If want to run yout worker in a different process, use a Procfile (like Heroku does) to start your workers. To generate a start script, see [sbt-start-script](https://github.com/sbt/sbt-start-script)
 
 
 Tips and Limitations
