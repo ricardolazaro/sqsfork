@@ -17,9 +17,7 @@ case class SQSBatchDone(messages: List[Message])
 case class SQSMessage(message: Message)
 case class SQSMessages(messages: List[Message])
 case class SQSFetchDone(messages: List[Message])
-case class SQSProcessedMessage(message: Message, successfull: Boolean)
-case class SQSMessageForDelete(message: Message, sourceUrl: String)
-case class SQSMessageForFutureRetry(messageBody: String)
+case class SQSProcessDone(message: Message, successfull: Boolean)
 
 /**
  * This actor fetches messages from SQS queue
@@ -59,7 +57,7 @@ class SQSProcessActor(workerInstance: SQSWorker) extends Actor with ActorLogging
   def receive = {
     case SQSMessage(message) => {
       workerInstance.perform(message)
-      sender ! SQSProcessedMessage(message, true)
+      sender ! SQSProcessDone(message, true)
     }
   }
   
@@ -84,7 +82,7 @@ class SQSBatchActor(workerInstance: SQSWorker, concurrency: Int) extends Actor w
       
       val successfullMessages = ArrayBuffer.empty[Message]
       jobs.foreach(job => {
-        val processed = Await.result(job, timeout.duration).asInstanceOf[SQSProcessedMessage]
+        val processed = Await.result(job, timeout.duration).asInstanceOf[SQSProcessDone]
         if (processed.successfull) {
           successfullMessages += processed.message
         }
