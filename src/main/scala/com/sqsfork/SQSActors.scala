@@ -21,53 +21,55 @@ case class SQSProcessedMessage(message: Message, successfull: Boolean)
 case class SQSMessageForDelete(message: Message, sourceUrl: String)
 case class SQSMessageForFutureRetry(messageBody: String)
 
-class SQSManagerActor(workerInstance: SQSWorker, credentials: Credentials, actorSystem: ActorSystem) extends Actor with ActorLogging {
-  
-  val queueName = workerInstance.config.get("queueName") match {
-  	case queueName => queueName.get
-  }
-  val concurrency = workerInstance.config.getOrElse("concurrency", "10").toInt
-  val batches = (concurrency / 10) + 1 
-  
-  val sqsHelper = new SQSHelper(credentials.accessKey, credentials.secretKey, queueName)
-  
-  val fetcher = actorSystem.actorOf(Props(new SQSFetchActor(sqsHelper)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
-  val batcher = actorSystem.actorOf(Props(new SQSBatchActor(workerInstance, concurrency)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
-  val deleter = actorSystem.actorOf(Props(new SQSDeleteActor(sqsHelper)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
-  
-  
-  sys.ShutdownHookThread {
-    stopActors()
-  }
-
-  def stopActors() = {
-    context.stop(fetcher);
-  }
-
-  def receive = {
-    case "bootstrap" => {
-      for (i <- 1 to batches) fetcher ! "fetch"
-    }
-    case SQSFetchDone(messages) => {
-      batcher ! SQSMessages(messages)
-    }
-    case SQSBatchDone(messages) => {
-      fetcher ! "fetch"
-      deleter ! SQSMessages(messages)
-    }
-  }
-}
-
+/**
+ * This actor fetches messages from SQS queue
+ * and send the messages to the manager actor
+ */
 class SQSFetchActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
+  
   def receive = {
     case "fetch" => {
-      log.info("fetching message...")
+      log.info("fetching messages...")
       val messages = sqsHelper.fetchMessages
       sender ! SQSFetchDone(messages)
     }
   }
+  
 }
 
+/**
+ * This actor deletes messages from SQS queue
+ */
+class SQSDeleteActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
+  
+  def receive = {
+    case SQSMessages(messages) => {
+      sqsHelper.deleteMessages(messages)
+    }
+  }
+  
+}
+
+/**
+ * This actor executes the user job for a message,
+ * calling the SQSWorker#perform method
+ */
+class SQSProcessActor(workerInstance: SQSWorker) extends Actor with ActorLogging { 
+  
+  def receive = {
+    case SQSMessage(message) => {
+      workerInstance.perform(message)
+      sender ! SQSProcessedMessage(message, true)
+    }
+  }
+  
+}
+
+/**
+ * This actor receives a batch of messages and 
+ * send each message to the SQSProcessActor in parallel
+ * After all messages got processed, it notifies the manager actor
+ */
 class SQSBatchActor(workerInstance: SQSWorker, concurrency: Int) extends Actor with ActorLogging {
   
   val process = this.context.system.actorOf(Props(new SQSProcessActor(workerInstance)).withRouter(RoundRobinRouter(nrOfInstances = concurrency)))
@@ -90,21 +92,49 @@ class SQSBatchActor(workerInstance: SQSWorker, concurrency: Int) extends Actor w
       sender ! SQSBatchDone(successfullMessages.toList)
     }
   }
+  
 }
 
-class SQSProcessActor(workerInstance: SQSWorker) extends Actor with ActorLogging { 
-  def receive = {
-    case SQSMessage(message) => {
-      workerInstance.perform(message)
-      sender ! SQSProcessedMessage(message, true)
-    }
-  }
-}
 
-class SQSDeleteActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
+/**
+ * This is the system's central actor, it bootstraps the 
+ * engine and controls how and when other actors get called  
+ */
+class SQSManagerActor(workerInstance: SQSWorker, credentials: Credentials) extends Actor with ActorLogging {
+  
+  val queueName = workerInstance.config.get("queueName") match {
+  	case queueName => queueName.get
+  }
+  val concurrency = workerInstance.config.getOrElse("concurrency", "10").toInt
+  val batches = (concurrency / 10) + 1 
+  
+  val sqsHelper = new SQSHelper(credentials.accessKey, credentials.secretKey, queueName)
+  
+  val system = this.context.system
+  val fetcher = system.actorOf(Props(new SQSFetchActor(sqsHelper)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
+  val batcher = system.actorOf(Props(new SQSBatchActor(workerInstance, concurrency)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
+  val deleter = system.actorOf(Props(new SQSDeleteActor(sqsHelper)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
+  
+  
+  sys.ShutdownHookThread {
+    stopActors()
+  }
+
+  def stopActors() = {
+    context.stop(fetcher);
+  }
+
   def receive = {
-    case SQSMessages(messages) => {
-      sqsHelper.deleteMessages(messages)
+    case "bootstrap" => {
+      for (i <- 1 to batches) fetcher ! "fetch"
+    }
+    case SQSFetchDone(messages) => {
+      batcher ! SQSMessages(messages)
+    }
+    case SQSBatchDone(messages) => {
+      fetcher ! "fetch"
+      deleter ! SQSMessages(messages)
     }
   }
+  
 }
