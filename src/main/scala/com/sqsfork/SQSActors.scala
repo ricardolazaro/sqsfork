@@ -42,6 +42,7 @@ class SQSDeleteActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
   
   def receive = {
     case SQSMessages(messages) => {
+      log.info("deleting messages...")
       sqsHelper.deleteMessages(messages)
     }
   }
@@ -75,6 +76,7 @@ class SQSBatchActor(workerInstance: SQSWorker, concurrency: Int) extends Actor w
   
   def receive = {
     case SQSMessages(messages) => {
+      log.info("processing batch...")
       val jobs = ArrayBuffer.empty[Future[Any]]
       messages.foreach(message => {
          jobs += process ? SQSMessage(message)
