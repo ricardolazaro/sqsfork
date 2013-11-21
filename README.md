@@ -52,13 +52,13 @@ Getting Start
     }
   ```
   
-  With **waitForever = false**, the engine starts and this thread continues to execute. If **waitForever = true** the thread 
-  will be blocked (suitable to be executed in different process, like heroku workers)
+  With **waitForever = false**, the engine starts and this thread continues to execute. If **waitForever = true**, the thread 
+  will be blocked (suitable to be executed in dedicated process, like heroku workers)
 
 Deploy
 ------
 
-You can call **worker.run** in any initializer application hook (in this case use **waitForever = false**)
+You can call **worker.run** in any initializer application hook (in this case use **waitForever = false**).
 If you want to run your worker in a different process, use a Procfile (like Heroku does) to start your workers. To generate a start script, see [sbt-start-script](https://github.com/sbt/sbt-start-script)
 
 
