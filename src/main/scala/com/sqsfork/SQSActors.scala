@@ -12,6 +12,7 @@ import akka.routing.RoundRobinRouter
 import akka.util.Timeout
 import scala.concurrent.Future
 import scala.concurrent.Await
+import akka.actor.ActorRef
 
 case class SQSBatchDone(messages: List[Message])
 case class SQSMessage(message: Message)
@@ -69,9 +70,8 @@ class SQSProcessActor(workerInstance: SQSWorker) extends Actor with ActorLogging
  * send each message to the SQSProcessActor in parallel
  * After all messages got processed, it notifies the manager actor
  */
-class SQSBatchActor(workerInstance: SQSWorker, concurrency: Int) extends Actor with ActorLogging {
+class SQSBatchActor(processor: ActorRef) extends Actor with ActorLogging {
   
-  val process = this.context.system.actorOf(Props(new SQSProcessActor(workerInstance)).withRouter(RoundRobinRouter(nrOfInstances = concurrency)))
   implicit val timeout = Timeout(5 seconds)
   
   def receive = {
@@ -79,7 +79,7 @@ class SQSBatchActor(workerInstance: SQSWorker, concurrency: Int) extends Actor w
       log.info("processing batch...")
       val jobs = ArrayBuffer.empty[Future[Any]]
       messages.foreach(message => {
-         jobs += process ? SQSMessage(message)
+         jobs += processor ? SQSMessage(message)
       })
       
       val successfullMessages = ArrayBuffer.empty[Message]
@@ -111,8 +111,9 @@ class SQSManagerActor(workerInstance: SQSWorker, credentials: Credentials) exten
   val sqsHelper = new SQSHelper(credentials.accessKey, credentials.secretKey, queueName)
   
   val system = this.context.system
+  val processor = system.actorOf(Props(new SQSProcessActor(workerInstance)).withRouter(RoundRobinRouter(nrOfInstances = concurrency)))
   val fetcher = system.actorOf(Props(new SQSFetchActor(sqsHelper)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
-  val batcher = system.actorOf(Props(new SQSBatchActor(workerInstance, concurrency)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
+  val batcher = system.actorOf(Props(new SQSBatchActor(processor)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
   val deleter = system.actorOf(Props(new SQSDeleteActor(sqsHelper)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
   
   
@@ -121,7 +122,11 @@ class SQSManagerActor(workerInstance: SQSWorker, credentials: Credentials) exten
   }
 
   def stopActors() = {
+    log.info("stoping actors...")
     context.stop(fetcher);
+    context.stop(processor);
+    context.stop(batcher);
+    context.stop(deleter);
   }
 
   def receive = {
