@@ -19,7 +19,6 @@ Getting Start
 2. Add a worker to process messages asynchronously:
 
   ```scala
-    import com.sqsfork.Credentials
     import com.sqsfork.SQSWorker
     import com.amazonaws.services.sqs.model.Message
   
@@ -39,6 +38,8 @@ Getting Start
 3. Start the worker:
 
   ```scala
+    import com.sqsfork.Credentials
+
     object Main extends App {
       
       implicit val credendials = Credentials("yourAwsAccessKey","yourAwsSecretAccessKey")
