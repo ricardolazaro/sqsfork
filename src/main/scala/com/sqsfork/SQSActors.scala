@@ -1,18 +1,20 @@
 package com.sqsfork
 
 import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.Await
+import scala.concurrent.Future
 import scala.concurrent.duration._
+
 import com.amazonaws.services.sqs.model.Message
+
 import akka.actor.Actor
 import akka.actor.ActorLogging
+import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.pattern.ask
 import akka.routing.RoundRobinRouter
 import akka.util.Timeout
-import scala.concurrent.Future
-import scala.concurrent.Await
-import akka.actor.ActorRef
 
 case class SQSBatchDone(messages: List[Message])
 case class SQSMessage(message: Message)
@@ -25,7 +27,6 @@ case class SQSProcessDone(message: Message, successfull: Boolean)
  * and send the messages to the manager actor
  */
 class SQSFetchActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
-  
   def receive = {
     case "fetch" => {
       log.info("fetching messages...")
@@ -33,21 +34,18 @@ class SQSFetchActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
       sender ! SQSFetchDone(messages)
     }
   }
-  
 }
 
 /**
  * This actor deletes messages from SQS queue
  */
 class SQSDeleteActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
-  
   def receive = {
     case SQSMessages(messages) => {
       log.info("deleting messages...")
       sqsHelper.deleteMessages(messages)
     }
   }
-  
 }
 
 /**
@@ -55,15 +53,23 @@ class SQSDeleteActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
  * calling the SQSWorker#perform method
  */
 class SQSProcessActor(workerInstance: SQSWorker) extends Actor with ActorLogging { 
-  
   def receive = {
     case SQSMessage(message) => {
-      workerInstance.perform(message)
-      sender ! SQSProcessDone(message, true)
+      var successfull = true
+      try {
+        workerInstance.perform(message)
+      } catch {
+        //TODO: use a better error handler
+      	case e: Throwable => {
+      	  successfull = false	
+      	  log.error(e.toString())
+      	}
+      }
+      sender ! SQSProcessDone(message, successfull)
     }
   }
-  
 }
+
 
 /**
  * This actor receives a batch of messages and 
