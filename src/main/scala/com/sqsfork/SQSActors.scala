@@ -52,7 +52,7 @@ class SQSDeleteActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
  * This actor executes the user job for a message,
  * calling the SQSWorker#perform method
  */
-class SQSProcessActor(workerInstance: SQSWorker) extends Actor with ActorLogging { 
+class SQSProcessActor(workerInstance: SQSWorker) extends Actor with ActorLogging {
   def receive = {
     case SQSMessage(message) => {
       var successfull = true
@@ -60,34 +60,33 @@ class SQSProcessActor(workerInstance: SQSWorker) extends Actor with ActorLogging
         workerInstance.perform(message)
       } catch {
         //TODO: use a better error handler
-      	case e: Throwable => {
-      	  successfull = false	
-      	  log.error(e.toString())
-      	}
+        case e: Throwable => {
+          successfull = false
+          log.error(e.toString())
+        }
       }
       sender ! SQSProcessDone(message, successfull)
     }
   }
 }
 
-
 /**
- * This actor receives a batch of messages and 
+ * This actor receives a batch of messages and
  * send each message to the SQSProcessActor in parallel
  * After all messages got processed, it notifies the manager actor
  */
 class SQSBatchActor(processor: ActorRef) extends Actor with ActorLogging {
-  
+
   implicit val timeout = Timeout(5 seconds)
-  
+
   def receive = {
     case SQSMessages(messages) => {
       log.info("processing batch...")
       val jobs = ArrayBuffer.empty[Future[Any]]
       messages.foreach(message => {
-         jobs += processor ? SQSMessage(message)
+        jobs += processor ? SQSMessage(message)
       })
-      
+
       val successfullMessages = ArrayBuffer.empty[Message]
       jobs.foreach(job => {
         val processed = Await.result(job, timeout.duration).asInstanceOf[SQSProcessDone]
@@ -98,31 +97,29 @@ class SQSBatchActor(processor: ActorRef) extends Actor with ActorLogging {
       sender ! SQSBatchDone(successfullMessages.toList)
     }
   }
-  
+
 }
 
-
 /**
- * This is the system's central actor, it bootstraps the 
- * engine and controls how and when other actors get called  
+ * This is the system's central actor, it bootstraps the
+ * engine and controls how and when other actors get called
  */
 class SQSManagerActor(workerInstance: SQSWorker, credentials: Credentials) extends Actor with ActorLogging {
-  
+
   val queueName = workerInstance.config.get("queueName") match {
-  	case queueName => queueName.get
+    case queueName => queueName.get
   }
   val concurrency = workerInstance.config.getOrElse("concurrency", "10").toInt
-  val batches = (concurrency / 10) + 1 
-  
+  val batches = (concurrency / 10) + 1
+
   val sqsHelper = new SQSHelper(credentials.accessKey, credentials.secretKey, queueName)
-  
+
   val system = this.context.system
   val processor = system.actorOf(Props(new SQSProcessActor(workerInstance)).withRouter(RoundRobinRouter(nrOfInstances = concurrency)))
   val fetcher = system.actorOf(Props(new SQSFetchActor(sqsHelper)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
   val batcher = system.actorOf(Props(new SQSBatchActor(processor)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
   val deleter = system.actorOf(Props(new SQSDeleteActor(sqsHelper)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
-  
-  
+
   sys.ShutdownHookThread {
     stopActors()
   }
@@ -147,5 +144,5 @@ class SQSManagerActor(workerInstance: SQSWorker, credentials: Credentials) exten
       deleter ! SQSMessages(messages)
     }
   }
-  
+
 }
