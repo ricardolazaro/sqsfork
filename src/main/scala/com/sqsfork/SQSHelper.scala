@@ -9,6 +9,8 @@ import com.amazonaws.services.sqs.model.CreateQueueRequest
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest
 import com.amazonaws.services.sqs.model.Message
 import scala.collection.JavaConverters._
+import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest
+import com.amazonaws.services.sqs.model.DeleteMessageBatchRequestEntry
 
 
 /**
@@ -28,8 +30,11 @@ class SQSHelper(accessKey: String, secretKey: String, queueName: String) {
     client.receiveMessage(request).getMessages().asScala.toList
   }
     
-  def deleteMessage(receiptHandle: String) = {
-    client.deleteMessage(new DeleteMessageRequest(queueUrl, receiptHandle))
+  def deleteMessages(messages: List[Message]) = {
+    if (messages.nonEmpty) {
+      val entries = messages map (message => { new DeleteMessageBatchRequestEntry(message.getMessageId(), message.getReceiptHandle()) })
+      client.deleteMessageBatch(new DeleteMessageBatchRequest(queueUrl, entries.asJava))
+    }
   }
   
 }
