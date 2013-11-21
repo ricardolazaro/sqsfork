@@ -58,7 +58,7 @@ Getting Start
 Deploy
 ------
 
-You can call **worker.run** in any initializer application hook (in this case use **waitForever = false**).
+You can call **worker.run** in any initializer hook from your application (in this case use **waitForever = false**).
 If you want to run your worker in a different process, use a Procfile (like Heroku does) to start your workers. To generate a start script, see [sbt-start-script](https://github.com/sbt/sbt-start-script)
 
 
