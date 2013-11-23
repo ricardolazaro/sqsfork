@@ -4,9 +4,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
 import com.amazonaws.services.sqs.model.Message
-
 import akka.actor.Actor
 import akka.actor.ActorLogging
 import akka.actor.ActorRef
@@ -15,6 +13,8 @@ import akka.actor.Props
 import akka.pattern.ask
 import akka.routing.RoundRobinRouter
 import akka.util.Timeout
+import akka.routing.Broadcast
+import akka.actor.PoisonPill
 
 case class SQSBatchDone(messages: List[Message])
 case class SQSMessage(message: Message)
@@ -29,7 +29,7 @@ case class SQSProcessDone(message: Message, successfull: Boolean)
 class SQSFetchActor(sqsHelper: SQSHelper) extends Actor with ActorLogging {
   def receive = {
     case "fetch" => {
-      log.info("fetching messages...")
+      log.debug("fetching messages...")
       val messages = sqsHelper.fetchMessages
       sender ! SQSFetchDone(messages)
     }
@@ -81,7 +81,7 @@ class SQSBatchActor(processor: ActorRef) extends Actor with ActorLogging {
 
   def receive = {
     case SQSMessages(messages) => {
-      log.info("processing batch...")
+      log.debug("processing batch...")
       val jobs = ArrayBuffer.empty[Future[Any]]
       messages.foreach(message => {
         jobs += processor ? SQSMessage(message)
@@ -120,18 +120,6 @@ class SQSManagerActor(workerInstance: SQSWorker, credentials: Credentials) exten
   val batcher = system.actorOf(Props(new SQSBatchActor(processor)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
   val deleter = system.actorOf(Props(new SQSDeleteActor(sqsHelper)).withRouter(RoundRobinRouter(nrOfInstances = batches)))
 
-  sys.ShutdownHookThread {
-    stopActors()
-  }
-
-  def stopActors() = {
-    log.info("stoping actors...")
-    context.stop(fetcher);
-    context.stop(processor);
-    context.stop(batcher);
-    context.stop(deleter);
-  }
-
   def receive = {
     case "bootstrap" => {
       for (i <- 1 to batches) fetcher ! "fetch"
@@ -143,6 +131,21 @@ class SQSManagerActor(workerInstance: SQSWorker, credentials: Credentials) exten
       fetcher ! "fetch"
       deleter ! SQSMessages(messages)
     }
+  }
+
+  sys.ShutdownHookThread {
+    stopActors()
+  }
+
+  def stopActors() = {
+    log.debug("stoping actors...")
+    context.stop(fetcher);
+
+    context.stop(batcher)
+    while (!batcher.isTerminated) { Thread.sleep(100) }
+
+    deleter ! Broadcast(PoisonPill)
+    while (!deleter.isTerminated) { Thread.sleep(100) }
   }
 
 }
