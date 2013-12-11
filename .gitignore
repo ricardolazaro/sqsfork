@@ -4,6 +4,9 @@
 .project
 bin
 
+*.iml
+.idea/
+
 # sbt specific
 .cache/
 .history/

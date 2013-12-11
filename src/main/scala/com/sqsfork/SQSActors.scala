@@ -112,7 +112,7 @@ class SQSManagerActor(workerInstance: SQSWorker, credentials: Credentials) exten
   val concurrency = workerInstance.config.getOrElse("concurrency", "10").toInt
   val batches = (concurrency / 10) + 1
 
-  val sqsHelper = new SQSHelper(credentials.accessKey, credentials.secretKey, queueName)
+  val sqsHelper = new SQSHelper(credentials.accessKey, credentials.secretKey, workerInstance.queueName, workerInstance.endpoint)
 
   val system = this.context.system
   val processor = system.actorOf(Props(new SQSProcessActor(workerInstance)).withRouter(RoundRobinRouter(nrOfInstances = concurrency)))

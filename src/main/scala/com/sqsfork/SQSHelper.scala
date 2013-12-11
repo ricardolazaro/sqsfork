@@ -2,8 +2,6 @@ package com.sqsfork
 
 import com.amazonaws.services.sqs.AmazonSQSClient
 import com.amazonaws.auth.BasicAWSCredentials
-import scala.collection.mutable.Buffer
-import com.amazonaws.services.sqs.model.DeleteMessageRequest
 import com.amazonaws.services.sqs.model.SendMessageRequest
 import com.amazonaws.services.sqs.model.CreateQueueRequest
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest
@@ -15,10 +13,10 @@ import com.amazonaws.services.sqs.model.DeleteMessageBatchRequestEntry
 /**
  * HeLper to handle SQS Interface ( lots of uggly Java Api )
  */
-class SQSHelper(accessKey: String, secretKey: String, queueName: String) {
+class SQSHelper(accessKey: String, secretKey: String, queueName: String, endpoint: String) {
 
   private val client = new AmazonSQSClient(new BasicAWSCredentials(accessKey, secretKey))
-  client.setEndpoint("https://sqs.us-east-1.amazonaws.com/")
+  client.setEndpoint(endpoint)
 
   private lazy val queueUrl = client.createQueue(new CreateQueueRequest(queueName)).getQueueUrl
 
@@ -32,6 +30,10 @@ class SQSHelper(accessKey: String, secretKey: String, queueName: String) {
       val entries = messages map (message => { new DeleteMessageBatchRequestEntry(message.getMessageId(), message.getReceiptHandle()) })
       client.deleteMessageBatch(new DeleteMessageBatchRequest(queueUrl, entries.asJava))
     }
+  }
+
+  def send(body: String) = {
+    client.sendMessage(new SendMessageRequest(queueUrl, body))
   }
 
 }
