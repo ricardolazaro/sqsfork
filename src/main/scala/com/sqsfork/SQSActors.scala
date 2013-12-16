@@ -77,7 +77,7 @@ class SQSProcessActor(workerInstance: SQSWorker) extends Actor with ActorLogging
  */
 class SQSBatchActor(processor: ActorRef) extends Actor with ActorLogging {
 
-  implicit val timeout = Timeout(5 seconds)
+  implicit val timeout = Timeout(120 seconds)
 
   def receive = {
     case SQSMessages(messages) => {
